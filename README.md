@@ -1,6 +1,6 @@
 # 扰动预测下游评估
 
-给定单细胞扰动表达预测与对应真实数据，计算 **DE20 MSE ↓、DE20 Δr ↑、Pearson-Δ ↑、PDS ↑**。支持通用 H5AD/NPZ 输入，以及 GEARS Norman 的两目录评估入口。完整公式和聚合规则见“指标口径”。
+给定单细胞扰动表达预测与对应真实数据，计算 **DE20 MSE ↓、DE20 Δr ↑、Pearson-Δ ↑、PDS ↑**。通用入口和 GEARS 入口都区分预测、真值、结果输出三个路径。GEARS 的前两项采用 Chreode 实验复现的共享词表口径。
 
 仓库仅包含评估代码、示例配置与生成合成数据的测试。评估本身不需要模型权重、训练代码、GPU、GEARS 或 cell-eval 环境。
 
@@ -36,23 +36,51 @@ python -m pip install -e .
 
 安装后提供 `gears-eval` 和 `perturbation-eval` 两个命令，也保留原脚本和 `python -m evaluate` 方式。仓库可以克隆到任意目录，不要求父目录存在 Chreode 或 Lingshu-Cell 仓库。
 
-## GEARS：只提供 Norman 数据目录与已有结果目录
+## GEARS：预测、真值、评估输出三个路径
 
-评估已经产生的 GEARS 预测，使用专用入口，命令只需要两个目录参数：
+评估已经产生的 GEARS 预测，使用三个必填参数：
 
 ```bash
 gears-eval \
-  --data-dir /path/to/chreode/output/gears/data \
-  --output-dir /path/to/gears/outputs
+  --pred-path /path/to/gears/predictions/test_res.pkl \
+  --truth-path /path/to/chreode/output/gears/data \
+  --output-dir /path/to/gears/evaluation
 ```
 
 也可在仓库根目录运行 `python evaluate_gears.py` 或安装后运行 `python -m evaluate.evaluate_gears`，参数完全相同。
 
-脚本自动读取 `--data-dir/norman/perturb_processed.h5ad`；如果参数直接指向 `norman` 子目录，则读取其中的 `perturb_processed.h5ad`。这是 [GEARS 的标准数据布局](https://github.com/snap-stanford/GEARS/blob/master/gears/pertdata.py)。固定使用 `obs.condition`、真实 `ctrl` 对照、`var.gene_name`（不存在时使用 `var_names`），保留 GEARS 已处理的表达尺度。
+`--pred-path` 可指定 `predictions.npz`、可信的 `test_res.pkl` 或所在目录。目录模式优先选择 `predictions.npz`；需要明确某个实验产物时直接指定文件。NPZ 必须包含 `pred/truth/conditions/gene_names`，PKL 必须包含 `pred/truth/pert_cat`。PKL 按真实 GEARS 数据的原始基因列顺序解释，要求来自同一份数据。
 
-`--output-dir` 同时是**已有预测所在目录**和**本次评估输出目录**。自动优先读取 `predictions.npz`；不存在时读取 Chreode `scripts/gears/run_norman_gears.py --save-test-res` 保存的 `test_res.pkl`。NPZ 使用其中的 `gene_names` 对齐；PKL 使用 Norman 数据的原始基因列顺序，要求其预测来自同一份 GEARS 数据。PKL 必须是可信的本地 GEARS 运行产物。
+`--truth-path` 可指定真实 `perturb_processed.h5ad`、Norman 子目录或 GEARS 数据根目录。后者定位 `norman/perturb_processed.h5ad`。真实文件提供 `obs.condition`、`ctrl` 对照和 `var.gene_name`（缺失时使用 `var_names`）。这是 [GEARS 的标准布局](https://github.com/snap-stanford/GEARS/blob/master/gears/pertdata.py)。保留已有表达尺度，不重新归一化。
 
-两个格式都按提供的真实 H5AD 计算 pseudobulk 和对照，不使用预测产物中嵌入的 `truth`。只评估预测包含的测试扰动；不重新生成 split。PKL 在临时目录转换后评分，不改写或新增预测文件。
+`--output-dir` 只指定本次评估报告位置，不再用于寻找预测。原有预测、模型及训练 `summary.json` 保留。只评估预测包含的测试扰动，不重新生成 split。
+
+### 与 Chreode 实验复现保持一致
+
+[Chreode 的原始评估器](https://github.com/MufanQiu/Chreode/blob/b3cc517276dadb8295776973367d4bfb2bb4894e/src/cellworldmodel/foundation/gears_shared_eval.py)使用预测产物中保存的、与测试行配对的 `truth` 计算真实 perturbation pseudobulk。真实 H5AD 提供未扰动对照；它的完整扰动细胞池不替换这份测试真值。这与通用入口从独立 H5AD 聚合真值的行为不同。
+
+前两项在 **真实 GEARS 基因 ∩ 预测基因 ∩ Chreode 允许词表** 中选 DE20。基因名转大写匹配，按真实基因顺序保留首个重复名称，预测同名列采用最后一个，均沿用原实现。对照均值保留原稀疏/稠密计算精度；PKL 先转 float32，再转 float64 计算测试均值。DE 排序使用原实现的 `np.argsort(effect)[-20:][::-1]`；MSE 使用原始 pseudobulk 表达差，Δr 使用原 `scipy.stats.pearsonr` 和常量向量规则。最后按测试扰动等权平均。
+
+词表自动依次查找预测目录的 `shared_vocab_genes.txt`、`shared_eval/shared_vocab_genes.txt`，以及从真值路径定位到的 Chreode 仓库中的 `artifacts/gene_vocab.parquet`、`data/phase0/gene_vocab.parquet`、`output/phase0/gene_vocab.parquet`。无法定位会报错，不退回全基因评分。使用自定义词表的原实验需要指定相同文件：
+
+```bash
+gears-eval \
+  --pred-path /path/to/gears/predictions/test_res.pkl \
+  --truth-path /path/to/chreode/output/gears/data \
+  --output-dir /path/to/gears/evaluation \
+  --gene-vocab /path/to/original/ours_genes.parquet
+```
+
+Parquet 词表需要 `pyarrow`，已包含在依赖文件中。JSON/TXT/NPY/NPZ 词表也支持。报告记录实际词表路径、SHA-256、共同基因数和具体 DE 基因。
+
+| 本工具指标 | Chreode 复现结果键 |
+| --- | --- |
+| `de20_mse` | `overall.shared_de_mse` |
+| `de20_delta_r` | `overall.shared_de_delta_pearson` |
+
+报告同时提供 `chreode_metrics` 字段，方便按原键名对照。Pearson-Δ 和 PDS 在同一共享基因集合上按下文定义计算。它们是新增的下游指标，不对应 Chreode 原表中的第三项 `shared_de_pearson`。
+
+**0.1.0 的 GEARS 入口未完整复现上述数据口径；比较 Chreode 实验时请使用 0.2.0 重新计算。** 数值对齐需同一份预测、配对真值、对照和词表。重新训练的模型不保证达到复现文档中的固定分数，评估器不会把结果校正到论文数值。
 
 四项得分打印到终端，并直接保存到指定的 `--output-dir`：
 
@@ -61,7 +89,7 @@ gears-eval \
 - `001_GEARS_conditions.csv`：逐扰动明细。
 - `001_GEARS_shared_genes.txt`：评估使用的共同基因。
 
-原有训练 `summary.json`、预测和模型文件保留。没有 `predictions.npz` 或 `test_res.pkl` 时明确报错；该入口只评分已有预测，不训练或重新推理，也不需要安装 PyTorch/GEARS。
+没有预测、配对 `truth`、对照或原词表时明确报错。该入口只评分已有预测，不训练或重新推理，也不需要安装 PyTorch/GEARS。
 
 ## 使用现有 Chreode 生成 GEARS 预测
 
@@ -70,7 +98,7 @@ gears-eval \
 ```bash
 python /path/to/chreode/scripts/gears/run_norman_gears.py \
   --data-dir /path/to/chreode/output/gears/data \
-  --output-dir /path/to/gears/outputs \
+  --output-dir /path/to/gears/predictions \
   --data-name norman \
   --split simulation \
   --seed 1 \
@@ -125,7 +153,7 @@ np.savez_compressed(
 )
 ```
 
-可以额外保存 `cell_type`、`donor`、`timepoint` 等背景数组，每个数组长度须等于行数。相同背景与扰动的行取算术平均；每个扰动已有一个 pseudobulk 时可直接使用。NPZ 中即使包含 `truth`，也**只使用 `--truth-path` 指定的真实数据**。使用字符串数组，避免 object/pickle 数组；通用入口不读取 `.pkl`，上述 GEARS 专用入口支持可信的 `test_res.pkl`。NPZ 整体读入内存，H5AD 的 `X` 分块读取。
+通用入口可以额外读取 `cell_type`、`donor`、`timepoint` 等背景数组，每个数组长度须等于行数。相同背景与扰动的行取算术平均；已有每个扰动一个 pseudobulk 时可直接使用。通用入口即使 NPZ 包含 `truth`，也**只使用独立 `--truth-path` 真值**；GEARS 复现入口则明确使用配对的 `truth`，见上文。使用字符串数组，避免 object/pickle 数组。通用入口不读取 `.pkl`；GEARS 专用入口支持可信的 `test_res.pkl`。
 
 ## 对照、背景与测试范围
 
@@ -196,7 +224,7 @@ perturbation-eval \
 | `pearson_delta` | 所有被评估背景、扰动、共同基因的绝对效应展开后计算一次 Pearson | 越高越好 |
 | `pds` | 同背景内 `d[t,j]=sum(abs(pred[t]-p[j]))`，`r[t]=count(d[t,j]<d[t,t])`，`1-2*sum(r)/T^2` | 越高越好 |
 
-DE20 选择沿用本地 `Chreode/src/cellworldmodel/foundation/gears_shared_eval.py`：在共同基因中按真实 `abs(l)` 排序，**不是 Wilcoxon/p 值显著性排序**，也不读取预测 DE 排名。相同效应时按共同基因顺序选择。默认 K=20，不足 20 时采用实际共同基因数并在明细中记录 `de_k`。`--top-k` 可用于检查其他 K，但默认结果才是 DE20。
+DE20 在共同基因中按真实 `abs(l)` 排序，**不是 Wilcoxon/p 值显著性排序**，也不读取预测 DE 排名。通用入口相同效应时按共同基因顺序选择；GEARS 入口使用 Chreode 的原始 argsort 顺序。默认 K=20，不足 20 时采用实际共同基因数并记录 `de_k`。通用入口的 `--top-k` 可检查其他 K；GEARS 入口固定 DE20。
 
 Pearson 常量向量按 Chreode 返回 0；同时输出 `undefined_correlations` 数量和逐扰动标记，便于识别退化输入。
 
@@ -220,5 +248,7 @@ python -m evaluate --help
 ```
 
 测试包括手算公式、符号/绝对效应差异、平局 PDS、pseudobulk 均值、基因乱序、稀疏矩阵、背景/对照、NPZ 忽略嵌入真值、归一化、目录歧义和清单端到端输出。
+
+GEARS 复现测试还使用 [原评估器生成的合成基准](tests/fixtures/README.md)，逐项核对两项总分、逐扰动分数和 DE 基因，误差容限 `1e-12`。覆盖 NPZ/PKL、稀疏/稠密真值、float32/float64 对照、配对测试真值与完整数据均值不同、基因大小写和顺序不同、共享词表以外的预测误差、重复测试行和对照行。
 
 参考：[Chreode 参考实现](https://github.com/MufanQiu/Chreode/blob/b3cc517276dadb8295776973367d4bfb2bb4894e/src/cellworldmodel/foundation/gears_shared_eval.py)；[Lingshu-Cell 外部评估封装](https://github.com/alibaba-damo-academy/Lingshu-Cell/blob/0cbde2feb6639f9411399794cf5e1c4831eb6c93/src/modules/evaluators/external/vcc_score.py)；[cell-eval 指标实现](https://github.com/ArcInstitute/cell-eval/blob/main/src/cell_eval/metrics/_anndata.py)（核对日期：2026-10-12）。本工具的四项公式和实现约定以本 README 为准；不保证等同于上游其他版本的同名指标。第三方数据、模型和代码的使用遵循各自的许可。

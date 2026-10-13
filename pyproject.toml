@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "perturbation-eval"
-version = "0.1.0"
+version = "0.2.0"
 description = "Pseudobulk evaluation of single-cell perturbation expression predictions"
 readme = "README.md"
 requires-python = ">=3.10"

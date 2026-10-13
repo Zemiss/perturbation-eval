@@ -92,3 +92,12 @@ def test_default_twenty_excludes_errors_outside_top_de_genes():
     assert result["per_condition"][0]["de_k"] == 20
     assert result["per_condition"][0]["de_genes"] == [f"g{i}" for i in range(31, 11, -1)]
     assert result["metrics"]["de20_mse"] == 0
+
+
+def test_chreode_de20_ties_follow_original_argsort():
+    truth = np.ones((1, 32))
+    pred = np.arange(32, dtype=float)[None, :]
+    result = score(pred, truth, de_protocol="chreode")
+    chosen = np.argsort(np.abs(truth[0]))[-20:][::-1]
+    assert result["per_condition"][0]["de_genes"] == [f"g{i}" for i in chosen]
+    assert result["metrics"]["de20_mse"] == pytest.approx(np.mean((pred[0, chosen] - 1) ** 2))

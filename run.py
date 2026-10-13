@@ -55,7 +55,7 @@ def _manifest_jobs(path, pred_root, truth_root, defaults):
     return jobs
 
 
-def _save_results(results, output, *, summary_stem="summary"):
+def _save_results(results, output, *, summary_stem="summary", protocol="downstream-design-v1"):
     output.mkdir(parents=True, exist_ok=True)
     summaries, csv_rows = [], []
     for i, result in enumerate(results, 1):
@@ -81,7 +81,7 @@ def _save_results(results, output, *, summary_stem="summary"):
                          "prediction": result["prediction"], "truth": result["truth"]})
     pd.DataFrame(csv_rows).to_csv(output / f"{summary_stem}.csv", index=False)
     (output / f"{summary_stem}.json").write_text(
-        json.dumps({"protocol": "downstream-design-v1", "evaluations": summaries}, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
+        json.dumps({"protocol": protocol, "evaluations": summaries}, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
         encoding="utf-8",
     )
 
