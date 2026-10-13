@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "perturbation-eval"
+version = "0.1.0"
+description = "Pseudobulk evaluation of single-cell perturbation expression predictions"
+readme = "README.md"
+requires-python = ">=3.10"
+dynamic = ["dependencies"]
+
+[project.optional-dependencies]
+test = ["pytest>=7,<10"]
+
+[project.scripts]
+perturbation-eval = "evaluate.run:main"
+gears-eval = "evaluate.evaluate_gears:main"
+
+[tool.setuptools]
+packages = ["evaluate"]
+package-dir = {evaluate = "."}
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
