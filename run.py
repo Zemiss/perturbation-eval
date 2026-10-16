@@ -1,4 +1,4 @@
-"""CLI for the four downstream perturbation prediction metrics."""
+"""Default VCC2026 CLI and retained legacy downstream evaluation functions."""
 
 import argparse
 import json
@@ -105,7 +105,7 @@ def build_parser():
     return parser
 
 
-def main(argv=None):
+def legacy_main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
@@ -137,6 +137,11 @@ def main(argv=None):
         return 0
     except (ValueError, FileNotFoundError, KeyError, OSError) as exc:
         parser.exit(2, f"Evaluation error: {exc}\n")
+
+
+def main(argv=None):
+    from evaluate.vcc2026 import main as counts_main
+    return counts_main(argv)
 
 
 if __name__ == "__main__":

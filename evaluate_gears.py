@@ -1,4 +1,4 @@
-"""Score GEARS predictions with Chreode's shared-vocabulary DE20 protocol."""
+"""VCC2026 CLI with Chreode's earlier GEARS protocol retained as legacy."""
 
 import argparse
 from contextlib import closing
@@ -98,7 +98,7 @@ def run_gears_evaluation(pred_path, truth_path, output_dir, *, gene_vocab=None):
     return result
 
 
-def main(argv=None):
+def legacy_main(argv=None):
     parser = argparse.ArgumentParser(description="Score GEARS using Chreode's shared-vocabulary DE20 protocol and the two downstream metrics.")
     parser.add_argument("--pred-path", "--prediction", required=True, type=Path, help="GEARS predictions.npz/test_res.pkl or their directory")
     parser.add_argument("--truth-path", "--truth", required=True, type=Path, help="Real perturb_processed.h5ad, Norman directory, or GEARS data root")
@@ -110,6 +110,11 @@ def main(argv=None):
     except (ValueError, FileNotFoundError, KeyError, OSError, ImportError, pickle.UnpicklingError, EOFError) as exc:
         parser.exit(2, f"GEARS evaluation error: {exc}\n")
     return 0
+
+
+def main(argv=None):
+    from evaluate.vcc2026 import main as counts_main
+    return counts_main(argv)
 
 
 if __name__ == "__main__":

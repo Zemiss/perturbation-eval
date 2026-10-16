@@ -1,0 +1,33 @@
+{
+  "source": "user-provided cell-eval2 0.18.0 source directory; matched the pinned PyPI release",
+  "source_sha256_lf": "cdcfe5a114ff2345af3c23be12f603058117f459b30671dc142dc7c179111d45",
+  "n_source_files": 51,
+  "de_backend": "pdex",
+  "environment": {
+    "cell-eval2": "0.18.0",
+    "pdex": "0.3.0",
+    "numpy": "2.5.4",
+    "scipy": "1.18.1",
+    "polars": "2.0.0",
+    "scanpy": "1.12.4"
+  },
+  "synthetic": true,
+  "cases": {
+    "dense": {
+      "de_wilcoxon_direction_fidelity_yield_raw": 0.9866666666666667,
+      "de_wilcoxon_direction_reach_raw": 1.0,
+      "de_wilcoxon_lfc_nmae": 0.12907682992392097,
+      "de_wilcoxon_sig_jaccard": 0.8425451092117759,
+      "expr_mse_unbiased_capped_norm": 0.0012171670638997446,
+      "pds_cosine": 1.0
+    },
+    "sparse": {
+      "de_wilcoxon_direction_fidelity_yield_raw": 0.9866666666666667,
+      "de_wilcoxon_direction_reach_raw": 1.0,
+      "de_wilcoxon_lfc_nmae": 0.12907682992392097,
+      "de_wilcoxon_sig_jaccard": 0.8425451092117759,
+      "expr_mse_unbiased_capped_norm": 0.0012171670638997446,
+      "pds_cosine": 1.0
+    }
+  }
+}

@@ -2,7 +2,6 @@ import json
 import pickle
 import subprocess
 import sys
-from pathlib import Path
 
 import anndata as ad
 import numpy as np
@@ -96,11 +95,10 @@ def test_gears_pickle_matrix_must_match_native_gene_order(tmp_path):
         run_gears_evaluation(output_dir, data_dir, tmp_path / "scores")
 
 
-def test_gears_direct_script_runs_with_three_required_paths(tmp_path):
+def test_legacy_gears_module_runs_with_three_required_paths(tmp_path):
     data_dir, output_dir = gears_files(tmp_path, "pkl")
-    script = Path(__file__).resolve().parents[1] / "evaluate_gears.py"
     scores = tmp_path / "scores"
-    process = subprocess.run([sys.executable, str(script), "--pred-path", str(output_dir), "--truth-path", str(data_dir), "--output-dir", str(scores)],
+    process = subprocess.run([sys.executable, "-m", "evaluate.chreode_gears", "--pred-path", str(output_dir), "--truth-path", str(data_dir), "--output-dir", str(scores)],
                              cwd=tmp_path, capture_output=True, text=True)
     assert process.returncode == 0, process.stderr
     assert "de20_mse" in process.stdout and "pds" in process.stdout

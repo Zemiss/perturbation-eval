@@ -189,7 +189,7 @@ def test_cli_writes_four_scores_and_details(tmp_path, use_manifest):
         manifest = tmp_path / "manifest.json"
         manifest.write_text(json.dumps({"evaluations": [{"name": "norman", "prediction": pred.name, "truth": truth.name}]}))
         args = ["--pred-path", str(tmp_path), "--truth-path", str(tmp_path), "--manifest", str(manifest), "--output-dir", str(output)]
-    proc = subprocess.run([sys.executable, "-m", "evaluate", *args], cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True)
+    proc = subprocess.run([sys.executable, "-m", "evaluate.legacy", *args], cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr
     result = json.loads((output / "summary.json").read_text())
     assert len(result["evaluations"]) == 1

@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "perturbation-eval"
-version = "0.2.0"
-description = "Pseudobulk evaluation of single-cell perturbation expression predictions"
+version = "0.3.0"
+description = "Strict VCC2026 counts evaluation using the six cell-eval2 metrics"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dynamic = ["dependencies"]
 
 [project.optional-dependencies]
@@ -16,6 +16,8 @@ test = ["pytest>=7,<10"]
 [project.scripts]
 perturbation-eval = "evaluate.run:main"
 gears-eval = "evaluate.evaluate_gears:main"
+perturbation-eval-legacy = "evaluate.run:legacy_main"
+gears-chreode-eval = "evaluate.evaluate_gears:legacy_main"
 
 [tool.setuptools]
 packages = ["evaluate"]
