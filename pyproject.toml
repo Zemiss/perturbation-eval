@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "perturbation-eval"
-version = "0.4.0"
-description = "Six VCC2026 raw metrics for existing GEARS test predictions"
+version = "0.5.0"
+description = "Six VCC2026 raw metrics for H5AD counts and GEARS test predictions"
 readme = "README.md"
 requires-python = ">=3.11"
 dynamic = ["dependencies"]

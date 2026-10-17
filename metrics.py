@@ -1,8 +1,8 @@
-"""VCC2026 metric functions on GEARS lognorm, extending exclusion to multi-gene targets."""
+"""VCC2026 metrics on H5AD counts or GEARS lognorm predictions."""
 
 from dataclasses import replace
 
-from cell_eval2 import EvalConfig, aggregate_metrics
+from cell_eval2 import EvalConfig, aggregate_metrics, compute_metrics
 from cell_eval2.de import TargetResolution, prepare_de
 from cell_eval2.de_compute import compute_de
 from cell_eval2.metrics.delta import PRED_TRACE_CAP_K, _across_pert_budget
@@ -23,6 +23,19 @@ METRICS = (
     "de_wilcoxon_direction_reach_raw", "de_wilcoxon_sig_jaccard",
     "de_wilcoxon_lfc_nmae",
 )
+
+
+def compute_counts_six(pred, truth, targets):
+    cfg = EvalConfig.from_preset("vcc2026")
+    cfg = replace(cfg, pert_col=PERT_COL, control=CONTROL, device="cpu",
+                  de=replace(cfg.de, backend="pdex"),
+                  target_gene_map={label: genes[0] for label, genes in targets.items()})
+    tidy = compute_metrics(pred, truth, config=cfg)
+    aggregated = aggregate_metrics(tidy, metrics=list(METRICS))
+    values = dict(aggregated.select("metric", "mean").iter_rows())
+    result = {name: float(values[name]) if name in values and np.isfinite(values[name]) else None
+              for name in METRICS}
+    return result, cfg
 
 
 def gears_config(targets):

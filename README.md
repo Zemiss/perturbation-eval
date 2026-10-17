@@ -1,12 +1,12 @@
-# GEARS 六指标评估
+# 扰动预测六指标评估
 
-直接读取已有的 GEARS `test_res.pkl` 和数据目录，计算 [Virtual Cell Challenge 2026](https://virtualcellchallenge.org/) 对应的六项**原始指标**。只需预测、真值数据、输出三个路径，不需要重新训练或手工转换 H5AD。
+输入**真值 H5AD、模型预测 H5AD、真实对照 H5AD、输出目录**四个路径，计算 [Virtual Cell Challenge 2026](https://virtualcellchallenge.org/) 对应的六项**原始指标**。兼容 Lingshu-Cell VCC 推理输出的 counts H5AD，也保留 GEARS `test_res.pkl` 输入。
 
-使用 `cell-eval2==0.18.0` 的指标函数与聚合，针对 GEARS 的 log-normalized 表达做适配。**不是比赛 counts 配置的官方成绩，不做 baseline/replicate 校准，不计算总分。**
+使用 `cell-eval2==0.18.0` 的指标函数与聚合。H5AD 使用 `vcc2026` counts 配置；GEARS 使用 log-normalized 适配。只计算原始指标，不做 baseline/replicate 校准，不计算总分。
 
 ## 安装与更新
 
-需要 Python 3.11 或更新版本。建议使用单独的评估环境；GEARS 训练环境继续用于生成预测。
+需要 Python 3.11 或更新版本。建议使用单独的评估环境，模型训练、推理环境继续用于生成预测。
 
 ```bash
 source ~/.bashrc
@@ -24,6 +24,37 @@ python -m pip install -e .
 
 ## 运行
 
+### H5AD：四个路径
+
+```bash
+perturbation-eval \
+  --truth-path /data/truth.h5ad \
+  --pred-path /data/merged.h5ad \
+  --control-path /data/control.h5ad \
+  --output-dir /data/results/model_run1
+```
+
+| 参数 | 文件内容 |
+| --- | --- |
+| `--truth-path` | 实验测到的真实扰动细胞 |
+| `--pred-path` | 模型生成的扰动细胞，如 Lingshu-Cell 的 `merged.h5ad` |
+| `--control-path` | 实验测到的真实未扰动对照细胞 |
+| `--output-dir` | 保存 `summary.csv`、`summary.json` 的目录 |
+
+不需要先生成 `merged_with_control.h5ad`。程序在内存中把独立真实对照分别用于预测和真值；真值或预测里已经附带的对照会被忽略。`--control-path` 始终是唯一的对照来源。
+
+H5AD 输入规则：
+
+- 三份文件的 `X` 都须是未经过 log1p/归一化的 counts：非负、有限、整数，每细胞总 counts 不超过 1,000,000。支持稠密或稀疏矩阵；不读取 `raw`/layers，不自动取整或猜测表达尺度。
+- 扰动列优先使用 `obs.target_gene`，兼容 `gene_target`、`condition`、`target`。若同时存在多列，其内容须一致。对照标签支持 `non-targeting`、`ctrl`、`non-perturbation`。
+- 对照文件可只含对照且没有扰动标签列，此时使用所有细胞；有标签列时只提取对照行，忽略其他扰动。文件必须提供实验对照，不能提供模型生成的对照。
+- 基因按名称对齐，优先使用 `var_names`，必要时使用文件内的 `var.gene_name` 注释。预测的全部基因必须在真值、对照中唯一匹配；真值、对照中的额外基因会被移除并记录。没有对应注释时，不自动转换 Ensembl ID 与基因符号。
+- 只评估预测中出现的扰动；真值中其他扰动被跳过并记录。预测中存在但真值中缺失的扰动会报错。两侧细胞不要求一一配对，数量可不同。
+- 支持 VCC 单靶基因扰动。三个输入必须属于同一实验背景；如提供 `obs.cell_type`，只允许一个相同的细胞类型。其他批次、供体等背景须在输入前筛选。
+- counts 分支直接使用原库的 pseudobulk 归一化、噪声修正、靶基因排除及 Wilcoxon/BH-FDR 规则；保留对照 CPM 过滤。JSON 记录三份实际输入路径、使用的细胞数、基因对齐、跳过的扰动与配置。
+
+### GEARS：保留三个路径
+
 ```bash
 gears-eval \
   --pred-path /data/xiebo/evaluate/outputs/GEARS/test_res.pkl \
@@ -33,7 +64,7 @@ gears-eval \
 
 同样支持 `perturbation-eval`、`python run.py`、`python evaluate_gears.py` 和安装后的 `python -m evaluate`，参数相同。默认固定使用 CPU/pdex，不需要 PyTorch、GEARS 包或 CUDA。
 
-## 输入与计算规则
+## GEARS 输入与计算规则
 
 - `--pred-path`：可信的 GEARS PKL，包含细胞 × 基因的 `pred`、配对测试 `truth` 和每个细胞的 `pert_cat`；也可指定包含 `test_res.pkl` 的目录。只读取自己的可信 PKL。
 - `--truth-path`：GEARS 数据根目录、Norman 目录，或明确的 H5AD。目录会查找 `norman/perturb_processed.h5ad` 或 `perturb_processed.h5ad`；发现两份时必须明确指定文件。
@@ -58,13 +89,13 @@ gears-eval \
 | `de_wilcoxon_sig_jaccard` | 显著 DE 基因集合 Jaccard | ↑ |
 | `de_wilcoxon_lfc_nmae` | log fold-change 归一化绝对误差 | ↓ |
 
-JSON 另含完整配置、实际路径、靶基因、预处理记录和指标状态。原库未定义的指标写为 `null`；真实效应的噪声修正分母之和非正时会报错，不生成伪造结果。旧四指标和旧协议入口已删除。
+JSON 另含完整配置、实际路径、靶基因、预处理记录和指标状态。原库未定义的指标写为 `null`；真实效应的噪声修正分母之和非正时会报错，不生成伪造结果。
 
 指标定义见 [cell-eval2 的 VCC2026 文档](https://github.com/ArcInstitute/cell-eval2/tree/main/docs/vcc2026_metrics)。归一化 GEARS 数据与官方 counts 的表达比较空间不同，结果只能在相同数据、预处理和配置下比较。
 
 ## 最小验证
 
-仅保留一份测试，检查三参数命令、与原库单靶基因 lognorm 结果的一致性、组合扰动排除及关键非法输入。
+测试检查 H5AD 四参数命令、独立真实对照、基因对齐、不同细胞数量、与原库 counts 结果的一致性；同时保留 GEARS 三参数、lognorm 数值和组合扰动排除回归测试，并拒绝关键非法输入。
 
 ```bash
 python -m pip install -e '.[test]'
