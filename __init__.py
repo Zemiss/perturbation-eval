@@ -1,1 +1,1 @@
-"""Evaluate original single-cell counts with cell-eval2's six VCC2026 metrics."""
+"""Six VCC2026 raw metrics for GEARS log-normalized predictions."""

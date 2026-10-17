@@ -2,7 +2,6 @@ numpy>=1.26,<3
 scipy>=1.11,<2
 pandas>=2.0,<3
 anndata>=0.10,<0.13
-h5py>=3.1,<4
-pyarrow>=10
+polars>=1,<3
 cell-eval2==0.18.0
 pdex==0.3.0
