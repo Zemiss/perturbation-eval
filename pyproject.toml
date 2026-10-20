@@ -5,10 +5,18 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "perturbation-eval"
 version = "0.5.0"
-description = "Six VCC2026 raw metrics for H5AD counts and GEARS test predictions"
+description = "Four-path H5AD evaluation with six VCC2026 raw metrics"
 readme = "README.md"
 requires-python = ">=3.11"
-dynamic = ["dependencies"]
+dependencies = [
+    "numpy>=1.26,<3",
+    "scipy>=1.11,<2",
+    "pandas>=2.0,<3",
+    "anndata>=0.10,<0.13",
+    "polars>=1,<3",
+    "cell-eval2==0.18.0",
+    "pdex==0.3.0",
+]
 
 [project.optional-dependencies]
 test = ["pytest>=7,<10"]
@@ -17,12 +25,8 @@ test = ["pytest>=7,<10"]
 perturbation-eval = "evaluate.run:main"
 gears-eval = "evaluate.run:main"
 
-[tool.setuptools]
-packages = ["evaluate"]
-package-dir = {evaluate = "."}
-
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
+[tool.setuptools.packages.find]
+include = ["evaluate*", "baseline*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

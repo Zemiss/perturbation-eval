@@ -1,8 +1,7 @@
-"""Four-path evaluation of generated counts against independent real controls."""
+"""Retain the counts Python API and check the current four-path H5AD CLI."""
 
 from dataclasses import replace
 import json
-from pathlib import Path
 import subprocess
 import sys
 
@@ -194,10 +193,20 @@ def test_unmeasured_targets_cannot_bypass_resolution_with_alias_labels(h5ad_case
 
 
 def test_four_path_cli(h5ad_case, tmp_path):
-    paths, *_ = h5ad_case
+    paths, genes, *_ = h5ad_case
+    # The CLI uses a fixed reference perturbation panel shared by all models.
+    truth = ad.read_h5ad(paths['truth'])
+    truth = truth[truth.obs.target_gene != 'G3'].copy()
+    truth.write_h5ad(paths['truth'])
+    # Embedded generated/unused controls must never replace --control-path.
+    for name in ['pred', 'truth']:
+        matrix = ad.read_h5ad(paths[name])
+        wrong_ctrl = counts_adata(np.full((3, 40), 999, dtype=np.int32),
+                                  ['non-targeting'] * 3, genes)
+        matrix = ad.concat([matrix, wrong_ctrl], index_unique='-')
+        matrix.write_h5ad(paths[name])
     output = tmp_path / "scores"
-    script = Path(__file__).resolve().parents[1] / "run.py"
-    result = subprocess.run([sys.executable, str(script), "--pred-path", str(paths["pred"]),
+    result = subprocess.run([sys.executable, '-m', 'evaluate', "--pred-path", str(paths["pred"]),
                              "--truth-path", str(paths["truth"]), "--control-path",
                              str(paths["control"]), "--output-dir", str(output)],
                             cwd=tmp_path, capture_output=True, text=True)
@@ -205,21 +214,21 @@ def test_four_path_cli(h5ad_case, tmp_path):
     summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
     assert set(summary["metrics"]) == set(METRICS)
     assert all(value is not None for value in summary["metrics"].values())
-    assert summary["protocol"] == "h5ad-counts-vcc2026-metrics"
-    assert summary["config"]["input_type"] == "counts"
+    assert summary["protocol"] == "h5ad-reference-panel-lognorm-v1"
+    assert summary["config"]["input_type"] == "lognorm"
     assert summary["config"]["control_source"] == "real"
     assert summary["config"]["de"]["backend"] == "pdex"
     assert summary["control_data"] == str(paths["control"])
-    assert summary["n_truth_cells"] == 192
-    assert summary["n_predicted_cells"] == 144
+    assert summary["n_real_test_cells"] == 192
+    assert summary["n_pred_cells"] == 144
+    assert summary['n_control_cells'] == 56
     assert sorted(p.name for p in output.iterdir()) == ["summary.csv", "summary.json"]
     assert (output / "summary.csv").read_text().splitlines()[0] == ",".join(METRICS)
 
 
 def test_h5ad_cli_requires_independent_control(h5ad_case, tmp_path):
     paths, *_ = h5ad_case
-    script = Path(__file__).resolve().parents[1] / "run.py"
-    result = subprocess.run([sys.executable, str(script), "--pred-path", str(paths["pred"]),
+    result = subprocess.run([sys.executable, '-m', 'evaluate', "--pred-path", str(paths["pred"]),
                              "--truth-path", str(paths["truth"]),
                              "--output-dir", str(tmp_path / "missing_control")],
                             capture_output=True, text=True)
@@ -228,7 +237,7 @@ def test_h5ad_cli_requires_independent_control(h5ad_case, tmp_path):
     assert not (tmp_path / "missing_control").exists()
 
 
-def test_gears_rejects_an_unused_control_argument(tmp_path, capsys):
+def test_gears_pkl_requires_the_separate_h5ad_exporter(tmp_path, capsys):
     from evaluate.run import main
 
     with pytest.raises(SystemExit) as result:
@@ -237,4 +246,33 @@ def test_gears_rejects_an_unused_control_argument(tmp_path, capsys):
               "--control-path", str(tmp_path / "control.h5ad"),
               "--output-dir", str(tmp_path / "results")])
     assert result.value.code == 2
-    assert "--control-path is supported only with H5AD" in capsys.readouterr().err
+    assert "expected an H5AD file" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize('column', ['gene_target', 'condition', 'target'])
+def test_current_reader_accepts_remote_label_and_control_aliases(h5ad_case, column):
+    from evaluate.data import open_source
+
+    paths, *_ = h5ad_case
+    matrix = ad.read_h5ad(paths['control'])
+    matrix.obs['target_gene'] = matrix.obs.target_gene.astype(str).replace(
+        {'non-targeting': 'Non-Perturbation'})
+    matrix.obs.rename(columns={'target_gene': column}, inplace=True)
+    matrix.write_h5ad(paths['control'])
+    source = open_source(paths['control'], 'control')
+    try:
+        assert len(source.rows) == 56
+        assert set(source.labels) == {'ctrl'}
+    finally:
+        source.adata.file.close()
+
+
+def test_current_reader_rejects_conflicting_perturbation_columns(h5ad_case):
+    from evaluate.data import open_source
+
+    paths, *_ = h5ad_case
+    matrix = ad.read_h5ad(paths['pred'])
+    matrix.obs['condition'] = 'G9'
+    matrix.write_h5ad(paths['pred'])
+    with pytest.raises(ValueError, match='conflicting perturbation columns'):
+        open_source(paths['pred'], 'pred')

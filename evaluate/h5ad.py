@@ -1,4 +1,4 @@
-"""Load VCC-style counts with an explicitly supplied experimental control pool."""
+"""Legacy counts Python API; the four-path CLI uses the fixed reference panel in data.py."""
 
 from contextlib import ExitStack
 from pathlib import Path

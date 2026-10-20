@@ -1,3 +1,5 @@
+> 历史设计记录：当前四路径 CLI、固定参考面板和统一 lognorm 协议以根目录 README.md 为准；GEARS PKL 已移至 baseline/gears/export.py 转换入口。
+
 # H5AD Independent Control Evaluation Implementation Plan
 
 > **For agentic workers:** Execute inline using executing-plans and test-driven-development. Review the completed change with requesting-code-review.

@@ -1,4 +1,4 @@
-"""VCC2026 metrics on H5AD counts or GEARS lognorm predictions."""
+"""Six VCC2026 metrics on aligned lognorm expression, with multi-gene target exclusion."""
 
 from dataclasses import replace
 
@@ -38,7 +38,7 @@ def compute_counts_six(pred, truth, targets):
     return result, cfg
 
 
-def gears_config(targets):
+def metric_config(targets):
     cfg = EvalConfig.from_preset("vcc2026")
     return replace(
         cfg, pert_col=PERT_COL, control=CONTROL, input_type="lognorm", device="cpu",
@@ -93,7 +93,7 @@ def _expression_rows(pred_bulk, real_bulk, targets, genes):
 
 
 def compute_six(pred, truth, targets):
-    cfg = gears_config(targets)
+    cfg = metric_config(targets)
     for matrix in (pred, truth):
         validate_input_type(matrix, "lognorm")
         check_scale_limit(matrix, "lognorm", cfg.max_counts_per_cell)

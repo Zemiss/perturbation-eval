@@ -1,103 +1,103 @@
-# 扰动预测六指标评估
+# 扰动预测评估
 
-输入**真值 H5AD、模型预测 H5AD、真实对照 H5AD、输出目录**四个路径，计算 [Virtual Cell Challenge 2026](https://virtualcellchallenge.org/) 对应的六项**原始指标**。兼容 Lingshu-Cell VCC 推理输出的 counts H5AD，也保留 GEARS `test_res.pkl` 输入。
+统一读取 **预测扰动、真实扰动、真实对照三份 H5AD**，使用 `cell-eval2==0.18.0` 计算六项 VCC2026 原始指标。每次评估一个模型，命令只需四个路径参数。基线推理及参考数据整理见 [baseline/README.md](baseline/README.md)。
 
-使用 `cell-eval2==0.18.0` 的指标函数与聚合。H5AD 使用 `vcc2026` counts 配置；GEARS 使用 log-normalized 适配。只计算原始指标，不做 baseline/replicate 校准，不计算总分。
+```text
+evaluate/          # H5AD 读取、指标和四路径命令入口
+baseline/          # Lingshu、Chreode、GEARS 的推理与格式整理
+tests/             # 小数据回归测试
+pyproject.toml     # 依赖与安装配置
+README.md
+```
 
-## 安装与更新
+## 安装
 
-需要 Python 3.11 或更新版本。建议使用单独的评估环境，模型训练、推理环境继续用于生成预测。
+Python ≥3.11；评估环境无需 PyTorch、GEARS 或 CUDA。
 
 ```bash
-source ~/.bashrc
-conda create -n perturbation-eval python=3.11 pip -y  # 只需首次创建
+conda create -n perturbation-eval python=3.11 pip -y
 conda activate perturbation-eval
-
 cd /data/xiebo/evaluate
-git pull --ff-only
 python -m pip install -e .
 ```
 
-`source ~/.bashrc` 适用于 Bash；使用 Zsh 时换成 `source ~/.zshrc`。如果已有 `GEARS` 环境的 Python ≥3.11，也可以在该环境安装，但依赖升级可能影响训练环境。
+## 四路径评估
 
-首次克隆时使用 `git clone https://github.com/Zemiss/perturbation-eval.git /data/xiebo/evaluate`；已有仓库只需上述 `git pull`。
-
-## 运行
-
-### H5AD：四个路径
+先准备好同一测试面板的真实扰动与对照文件，再分别评估模型。下面的 `evaluation/truth.h5ad`、`evaluation/control.h5ad` 是整理脚本生成的参考文件；官方原始下载保留 `train/`、`validation/`、`test/` 子目录，结构及整理命令见 [基线说明](baseline/README.md#路径)。
 
 ```bash
-perturbation-eval \
-  --truth-path /data/truth.h5ad \
-  --pred-path /data/merged.h5ad \
-  --control-path /data/control.h5ad \
-  --output-dir /data/results/model_run1
+cd /data/xiebo/evaluate
+python -m evaluate \
+  --pred-path /data/xiebo/outputs/lingshucell/prediction.h5ad \
+  --truth-path /data/dataset/lingshucell/vcc/evaluation/truth.h5ad \
+  --control-path /data/dataset/lingshucell/vcc/evaluation/control.h5ad \
+  --output-dir /data/xiebo/results/lingshucell
+
+python -m evaluate \
+  --pred-path /data/xiebo/outputs/chreode/prediction.h5ad \
+  --truth-path /data/dataset/lingshucell/vcc/evaluation/truth.h5ad \
+  --control-path /data/dataset/lingshucell/vcc/evaluation/control.h5ad \
+  --output-dir /data/xiebo/results/chreode
 ```
 
-| 参数 | 文件内容 |
+`perturbation-eval` 与 `python -m evaluate` 等价。评估器不读取 PKL，不再使用 `vcc` 子命令，也不依赖模型仓库、条件表或外部基因映射。
+
+| 参数 | 内容 |
 | --- | --- |
-| `--truth-path` | 实验测到的真实扰动细胞 |
-| `--pred-path` | 模型生成的扰动细胞，如 Lingshu-Cell 的 `merged.h5ad` |
-| `--control-path` | 实验测到的真实未扰动对照细胞 |
-| `--output-dir` | 保存 `summary.csv`、`summary.json` 的目录 |
+| `--pred-path` | 预测扰动细胞 H5AD |
+| `--truth-path` | 真实测试扰动细胞 H5AD |
+| `--control-path` | 真实对照细胞 H5AD |
+| `--output-dir` | 写入 `summary.csv`、`summary.json` 的目录 |
 
-不需要先生成 `merged_with_control.h5ad`。程序在内存中把独立真实对照分别用于预测和真值；真值或预测里已经附带的对照会被忽略。`--control-path` 始终是唯一的对照来源。
+## H5AD 约定
 
-H5AD 输入规则：
+- 每行一个细胞，每列一个基因，保留逐细胞表达；不能仅保存扰动均值。
+- 表达默认读取 `X` 的原始非负整数 counts。归一化表达必须在文件内声明 `uns['evaluation']['expression_scale'] = 'lognorm'`，含义是 log1p(normalized abundance)。已有 Chreode 的 `uns['vcc']['expression_scale']` 也兼容。程序不通过数值猜测尺度。
+- 若 counts 在 layer 中，可在文件内设 `uns['evaluation'] = {'expression_scale': 'counts', 'layer': 'counts'}`，评估仍只需四个参数。
+- 扰动标签优先读取 `obs.target_gene`，兼容 `obs.gene_target`、`obs.condition`、`obs.target`；多列同时存在时须一致。预测和真实扰动的标签集合必须相同；细胞数可以不同，不要求细胞配对。保留 `GENE+ctrl`、`GENE1+GENE2` 的完整身份。
+- 对照标签支持 `ctrl`、`control`、`non-targeting`、`non-perturbation`、`NT`，忽略大小写。如果对照文件没有扰动标签列，就将其全部行视为真实对照。有标签列时只选对照行，预测和真值内附带的对照会忽略，始终只使用 `--control-path` 的真实对照。
+- 基因优先读取 `var.gene_name`、`gene_symbols`、`symbol`、`feature_name`，否则使用 `var_names`。要求唯一的基因 symbol；匹配忽略大小写，自动重排顺序。原始 ENSG ID 可通过参考整理脚本转换。
+- 基因面板固定为真实扰动文件的全部基因。预测和对照必须覆盖这些基因，可以多出基因。缺基因时直接报错，避免各模型分别取交集造成分数不可比。VCC 两模型共享同一份整理后的 truth/control，详见基线文档。
+- 如有 `obs.cell_type`，每份文件必须只包含同一细胞背景，三份文件的背景须一致。
 
-- 三份文件的 `X` 都须是未经过 log1p/归一化的 counts：非负、有限、整数，每细胞总 counts 不超过 1,000,000。支持稠密或稀疏矩阵；不读取 `raw`/layers，不自动取整或猜测表达尺度。
-- 扰动列优先使用 `obs.target_gene`，兼容 `gene_target`、`condition`、`target`。若同时存在多列，其内容须一致。对照标签支持 `non-targeting`、`ctrl`、`non-perturbation`。
-- 对照文件可只含对照且没有扰动标签列，此时使用所有细胞；有标签列时只提取对照行，忽略其他扰动。文件必须提供实验对照，不能提供模型生成的对照。
-- 基因按名称对齐，优先使用 `var_names`，必要时使用文件内的 `var.gene_name` 注释。预测的全部基因必须在真值、对照中唯一匹配；真值、对照中的额外基因会被移除并记录。没有对应注释时，不自动转换 Ensembl ID 与基因符号。
-- 只评估预测中出现的扰动；真值中其他扰动被跳过并记录。预测中存在但真值中缺失的扰动会报错。两侧细胞不要求一一配对，数量可不同。
-- 支持 VCC 单靶基因扰动。三个输入必须属于同一实验背景；如提供 `obs.cell_type`，只允许一个相同的细胞类型。其他批次、供体等背景须在输入前筛选。
-- counts 分支直接使用原库的 pseudobulk 归一化、噪声修正、靶基因排除及 Wilcoxon/BH-FDR 规则；保留对照 CPM 过滤。JSON 记录三份实际输入路径、使用的细胞数、基因对齐、跳过的扰动与配置。
+counts 作为线性丰度；lognorm 用 `expm1` 转为线性丰度，再在固定参考基因上统一 normalize_total(10,000) + log1p。`expm1` 不恢复原始 counts。GEARS 导出器与 Chreode 推理脚本会将预测负值截到 0 并记录；评估器拒绝负数和 NaN/Inf。
 
-### GEARS：保留三个路径
+## GEARS
+
+新的 [推理入口](baseline/gears/infer.py) 直接写出 `/data/xiebo/outputs/gears/prediction.h5ad`，另将测试真值和真实对照写到数据目录。已有可信 `test_res.pkl` 可用 [转换入口](baseline/gears/export.py) 先转成三份 H5AD。两种方式都保留完整逐细胞结果和组合扰动；命令见 [基线说明](baseline/README.md)。随后调用同一个评估入口：
 
 ```bash
-gears-eval \
-  --pred-path /data/xiebo/evaluate/outputs/GEARS/test_res.pkl \
-  --truth-path /data/xiebo/Chreode/output/gears/data/ \
-  --output-dir /data/xiebo/evaluate/results/GEARS_run2
+python -m evaluate \
+  --pred-path /data/xiebo/outputs/gears/prediction.h5ad \
+  --truth-path /data/dataset/gears/evaluation/truth.h5ad \
+  --control-path /data/dataset/gears/evaluation/control.h5ad \
+  --output-dir /data/xiebo/results/gears
 ```
 
-同样支持 `perturbation-eval`、`python run.py`、`python evaluate_gears.py` 和安装后的 `python -m evaluate`，参数相同。默认固定使用 CPU/pdex，不需要 PyTorch、GEARS 包或 CUDA。
+只有相同数据、测试扰动、基因面板与配置的分数才可比较；GEARS Norman 与 VCC 是不同实验。
 
-## GEARS 输入与计算规则
-
-- `--pred-path`：可信的 GEARS PKL，包含细胞 × 基因的 `pred`、配对测试 `truth` 和每个细胞的 `pert_cat`；也可指定包含 `test_res.pkl` 的目录。只读取自己的可信 PKL。
-- `--truth-path`：GEARS 数据根目录、Norman 目录，或明确的 H5AD。目录会查找 `norman/perturb_processed.h5ad` 或 `perturb_processed.h5ad`；发现两份时必须明确指定文件。
-- 真实扰动表达使用 PKL 内的测试 `truth`；H5AD 的 `obs.condition == 'ctrl'` 和 `X` 提供真实对照。其他训练、验证或扰动细胞不加入评分。
-- 基因名优先使用 H5AD 的 `var.gene_name`，否则使用 `var_names`。通常 PKL 没有基因名，因此假定两侧是同一 GEARS 数据生成的、完整且顺序相同的基因轴；维度不同时报错。若 PKL 有 `gene_names`，按名称校验并对齐。使用全部这些基因，不再读取 Chreode 词表。
-- PKL 的预测、测试真值和 H5AD 的 `X` 应使用相同的 GEARS `log1p` 归一化尺度。程序不把表达值伪装成 counts，不取整，也不读取 `raw`/layers 猜测表达尺度。数值检查无法独立证明两个文件采用了相同的预处理。
-- 预测负值在 log1p 空间截到 0；截断数量打印并写入 `summary.json`。真实表达负值、NaN/Inf、非法基因轴或标签会报错。
-- 保留 `GENE+ctrl`、`GENE1+GENE2` 等完整扰动身份。PDS 排除整个测试面板涉及的靶基因；表达误差和 DE 排除每个扰动自身的全部靶基因。靶基因按符号匹配，大小写不同会对齐；未测量靶基因记录在结果中。
-- 以 `vcc2026` 参数为基础：真实对照、余弦距离、midrank、`n-1` 排名分母、Wilcoxon、每扰动 BH-FDR 0.05。沿用原库 CPU lognorm 行为，不应用 counts 专用的 CPM 过滤。
-- lognorm 表达/PDS 使用细胞表达均值，表达噪声修正使用原库的二阶矩、预测修正上限和面板预算约束；组合扰动扩展为排除全部组成基因。表达误差最终使用**分子之和／分母之和**，不平均逐扰动比值。
-
-## 输出
-
-只生成 `summary.csv` 和 `summary.json`，六项指标为：
+## 六项指标与输出
 
 | 指标 | 含义 | 方向 |
 | --- | --- | --- |
-| `pds_cosine` | 扰动效应余弦检索排名 | ↑ |
-| `expr_mse_unbiased_capped_norm` | 经噪声修正、上限约束并按真实效应归一化的表达误差 | ↓ |
+| `pds_cosine` | 扰动效应检索排名 | ↑ |
+| `expr_mse_unbiased_capped_norm` | 噪声修正后的归一化表达误差 | ↓ |
 | `de_wilcoxon_direction_fidelity_yield_raw` | DE 方向准确性与覆盖 | ↑ |
 | `de_wilcoxon_direction_reach_raw` | 指定方向纯度下的覆盖深度 | ↑ |
-| `de_wilcoxon_sig_jaccard` | 显著 DE 基因集合 Jaccard | ↑ |
-| `de_wilcoxon_lfc_nmae` | log fold-change 归一化绝对误差 | ↓ |
+| `de_wilcoxon_sig_jaccard` | 显著 DE 基因集合一致性 | ↑ |
+| `de_wilcoxon_lfc_nmae` | fold-change 归一化绝对误差 | ↓ |
 
-JSON 另含完整配置、实际路径、靶基因、预处理记录和指标状态。原库未定义的指标写为 `null`；真实效应的噪声修正分母之和非正时会报错，不生成伪造结果。
+使用真实对照、余弦距离、midrank、`n-1` 排名分母、Wilcoxon、每扰动 BH-FDR 0.05；CPU/pdex，关闭 counts 专用 CPM 过滤。PDS 排除面板全部靶基因；表达和 DE 排除各扰动自身的全部靶基因。表达误差保留原库噪声修正、预测修正上限及面板预算约束，按分子之和／分母之和聚合。
 
-指标定义见 [cell-eval2 的 VCC2026 文档](https://github.com/ArcInstitute/cell-eval2/tree/main/docs/vcc2026_metrics)。归一化 GEARS 数据与官方 counts 的表达比较空间不同，结果只能在相同数据、预处理和配置下比较。
+输出仅有 `summary.csv` 和 `summary.json`。JSON 同时记录输入路径、基因轴与指纹、真值/对照标准化表达指纹、表达尺度、靶基因及指标状态。未定义值记 `null`；真实效应的噪声修正分母之和非正时报错。这是六指标的 lognorm 适配，不做 baseline/replicate 校准或总分，不等同于官方 counts 成绩。指标实现可对照本地只读的 `cell-eval2` 仓库。
 
-## 最小验证
+数据集及整理后的参考 H5AD 放 `/data/dataset/`；代码、权重、预测、运行记录和评分放 `/data/xiebo/`。
 
-测试检查 H5AD 四参数命令、独立真实对照、基因对齐、不同细胞数量、与原库 counts 结果的一致性；同时保留 GEARS 三参数、lognorm 数值和组合扰动排除回归测试，并拒绝关键非法输入。
+## 小规模验证
 
 ```bash
 python -m pip install -e '.[test]'
 python -m pytest -q
 ```
+
+本地仅做格式及小数据测试，完整训练和推理在服务器运行。

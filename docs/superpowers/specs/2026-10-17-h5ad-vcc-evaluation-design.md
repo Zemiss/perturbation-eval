@@ -1,3 +1,5 @@
+> 历史设计记录：当前四路径 CLI、固定参考面板和统一 lognorm 协议以根目录 README.md 为准；GEARS PKL 已移至 baseline/gears/export.py 转换入口。
+
 # H5AD 四路径 VCC 六指标评估设计
 
 ## 目标与接口
