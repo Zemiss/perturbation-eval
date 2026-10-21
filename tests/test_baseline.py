@@ -119,6 +119,10 @@ def test_lingshu_uses_external_outputs_and_original_vcc_config(tmp_path):
     assert "infer/legacy_vcc" in result.stdout
     assert "sampler.steps=3" in result.stdout and "sampler.cfg_scale=2.0" in result.stdout
     assert "sampler.clue_csv=" in result.stdout
+    no_clue = subprocess.run([sys.executable, "-m", "baseline.lingshucell.infer", "--dry-run",
+                              "--no-clue", "--output-dir", str(output), "--run-dir", str(run_dir)],
+                             capture_output=True, text=True)
+    assert no_clue.returncode == 0 and "sampler.clue_csv=" not in no_clue.stdout
     assert str(output / "prediction.h5ad") in result.stdout
     assert f"output.workdir={run_dir}" in result.stdout
     assert not output.exists() and not run_dir.exists()

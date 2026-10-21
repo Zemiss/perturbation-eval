@@ -23,6 +23,7 @@ test = ["pytest>=7,<10"]
 
 [project.scripts]
 perturbation-eval = "evaluate.run:main"
+perturbation-compare = "baseline.compare:main"
 gears-eval = "evaluate.run:main"
 
 [tool.setuptools.packages.find]

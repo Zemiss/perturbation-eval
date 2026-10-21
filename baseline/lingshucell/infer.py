@@ -22,6 +22,7 @@ def main(argv=None):
     parser.add_argument("--run-dir", type=Path, default=Path("/data/xiebo/runs/lingshucell/vcc_infer"))
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--seed", type=int, default=0, help="Per-task base seed; global seed stays 3407")
+    parser.add_argument("--no-clue", action="store_true", help="Disable the clue biology prior for ablation")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="Print command without loading weights")
     args = parser.parse_args(argv)
@@ -35,25 +36,29 @@ def main(argv=None):
     command = [sys.executable, "-m", "workflows.infer.main", "--config-name", "infer/legacy_vcc",
                f"checkpoint.model_path={assets / 'vcc_perturbation_85M.pth'}",
                f"model.config.gene_embedding_file={assets / 'gene_embeddings.npz'}",
-               f"sampler.clue_csv={assets / 'whole_dataset_stringent_clue.csv'}",
                f"task.condition_csv={conditions}", f"task.batch_size={args.batch_size}",
                f"task.base_seed={args.seed}", "seed=3407", "sampler.steps=3", "sampler.cfg_scale=2.0",
                f"output.workdir={run_dir}", "output.sample_dir=inference"]
+    if not args.no_clue:
+        command.insert(command.index(f"task.condition_csv={conditions}"),
+                       f"sampler.clue_csv={assets / 'whole_dataset_stringent_clue.csv'}")
     if args.dry_run:
         print(f"cd {shlex.quote(str(repo))}\n{shlex.join(command)}")
         print(f"Export: {output / 'prediction.h5ad'}")
         return 0
     load_conditions(conditions)
-    for name in ["vcc_perturbation_85M.pth", "gene_embeddings.npz", "whole_dataset_stringent_clue.csv"]:
+    required = ["vcc_perturbation_85M.pth", "gene_embeddings.npz"]
+    if not args.no_clue:
+        required.append("whole_dataset_stringent_clue.csv")
+    for name in required:
         if not (assets / name).is_file():
             raise FileNotFoundError(assets / name)
     config = {"model": "lingshucell", "source_commit": git_revision(repo),
               "conditions_sha256": fingerprint(conditions), "batch_size": args.batch_size,
               "base_seed": args.seed, "expression_scale": "counts", "command": command,
+              "clue": not args.no_clue,
               "prediction_path": str(output / "prediction.h5ad"),
-              "assets_sha256": {name: fingerprint(assets / name) for name in
-                                ["vcc_perturbation_85M.pth", "gene_embeddings.npz",
-                                 "whole_dataset_stringent_clue.csv"]}}
+              "assets_sha256": {name: fingerprint(assets / name) for name in required}}
     manifest = run_dir / "run.json"
     resuming = False
     if run_dir.exists() and any(run_dir.iterdir()):
