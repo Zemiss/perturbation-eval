@@ -1,4 +1,6 @@
-# VCC H1 基线
+# VCC H1 基线（旧工具）
+
+当前评估只需要预测与真实 H5AD，见 [主 README](../README.md)。本目录的训练、推理和参考整理脚本保留用于旧实验，不是评估前置步骤。`baseline.compare` 保留旧 lognorm 口径。
 
 在评估仓库根目录运行。Chreode 与 Lingshu-Cell 共用同一份 `truth.h5ad`、`control.h5ad`、`panel.txt` 和 `conditions.csv`，最后用 `baseline.compare` 汇总六项指标。
 

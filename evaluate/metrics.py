@@ -25,9 +25,9 @@ METRICS = (
 )
 
 
-def compute_counts_six(pred, truth, targets):
+def compute_counts_six(pred, truth, targets, *, num_threads=-1):
     cfg = EvalConfig.from_preset("vcc2026")
-    cfg = replace(cfg, pert_col=PERT_COL, control=CONTROL, device="cpu",
+    cfg = replace(cfg, pert_col=PERT_COL, control=CONTROL, device="cpu", num_threads=num_threads,
                   de=replace(cfg.de, backend="pdex"),
                   target_gene_map={label: genes[0] for label, genes in targets.items()})
     tidy = compute_metrics(pred, truth, config=cfg)
@@ -38,10 +38,10 @@ def compute_counts_six(pred, truth, targets):
     return result, cfg
 
 
-def metric_config(targets):
+def metric_config(targets, *, num_threads=-1):
     cfg = EvalConfig.from_preset("vcc2026")
     return replace(
-        cfg, pert_col=PERT_COL, control=CONTROL, input_type="lognorm", device="cpu",
+        cfg, pert_col=PERT_COL, control=CONTROL, input_type="lognorm", device="cpu", num_threads=num_threads,
         # Upstream CPU lognorm skips its counts-only CPM filter; make that explicit.
         filter=replace(cfg.filter, filter_gene_min_cpm_cell=None),
         de=replace(cfg.de, backend="pdex"),
@@ -92,8 +92,8 @@ def _expression_rows(pred_bulk, real_bulk, targets, genes):
     return out
 
 
-def compute_six(pred, truth, targets):
-    cfg = metric_config(targets)
+def compute_six(pred, truth, targets, *, num_threads=-1):
+    cfg = metric_config(targets, num_threads=num_threads)
     for matrix in (pred, truth):
         validate_input_type(matrix, "lognorm")
         check_scale_limit(matrix, "lognorm", cfg.max_counts_per_cell)

@@ -1,4 +1,4 @@
-"""Score several predictions on one shared truth/control panel and compare them."""
+"""Legacy lognorm comparison on shared references; use evaluate for native counts scoring."""
 
 import argparse
 import csv
@@ -29,7 +29,7 @@ def compare(predictions, truth_path, control_path, output_dir):
     output.mkdir(parents=True, exist_ok=True)
     summaries, panels = {}, set()
     for name, path in predictions.items():
-        summary = evaluate(path, truth_path, control_path, output / name)
+        summary = evaluate(path, truth_path, control_path, output / name, protocol="lognorm")
         summaries[name] = summary
         panels.add(summary["gene_panel_sha256"])
     if len(panels) != 1:

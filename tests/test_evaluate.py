@@ -88,7 +88,7 @@ def test_h5ad_export_and_six_match_upstream(case, tmp_path, sparse_control):
     np.testing.assert_array_equal(real_ad.X, np.vstack([normalize(truth), normalize(ctrl)]))
     if sparse_control:
         pred_ad.X, real_ad.X = sparse.csr_matrix(pred_ad.X), sparse.csr_matrix(real_ad.X)
-    targets = {label: [label.split("+")[0]] for label in np.unique(labels)}
+    targets = {label.split("+")[0]: [label.split("+")[0]] for label in np.unique(labels)}
     reference = aggregate_metrics(compute_metrics(pred_ad, real_ad, config=metric_config(targets)))
     expected = dict(reference.select("metric", "mean").iter_rows())
     actual, _ = compute_six(pred_ad, real_ad, targets)
@@ -105,7 +105,7 @@ def test_four_path_cli_with_combination(case, tmp_path):
     output = tmp_path / "results"
     command = [sys.executable, "-m", "evaluate", "--pred-path", paths["prediction"],
                "--truth-path", paths["truth"], "--control-path", paths["control"],
-               "--output-dir", str(output)]
+               "--output-dir", str(output), "--protocol", "lognorm"]
     result = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     summary = json.loads((output / "summary.json").read_text())
@@ -162,19 +162,17 @@ def test_invalid_h5ad_is_rejected(case, tmp_path, problem):
         data = data[data.obs.target_gene != "G2+ctrl"].copy()
     data.write_h5ad(paths[role])
     with pytest.raises(ValueError):
-        evaluate(paths["prediction"], paths["truth"], paths["control"], tmp_path / "results")
+        evaluate(paths["prediction"], paths["truth"], paths["control"], tmp_path / "results", protocol="lognorm")
     assert not (tmp_path / "results/summary.json").exists()
 
 
-def test_control_path_required_and_no_pkl_in_evaluator(case, tmp_path):
+def test_h5ad_cli_help_and_no_pkl_in_evaluator(case, tmp_path):
     help_result = subprocess.run([sys.executable, "-m", "evaluate", "--help"], capture_output=True, text=True)
     assert help_result.returncode == 0
     assert all(flag in help_result.stdout for flag in ["--pred-path", "--truth-path", "--control-path", "--output-dir"])
     with pytest.raises(ValueError, match="H5AD"):
         open_source(tmp_path / "test_res.pkl", "pred")
-    missing = subprocess.run([sys.executable, "-m", "evaluate", "--pred-path", "a.h5ad",
-                              "--truth-path", "b.h5ad", "--output-dir", str(tmp_path)], capture_output=True, text=True)
-    assert missing.returncode == 2 and "--control-path" in missing.stderr
+    assert "dataset train/adata_Training.h5ad" in " ".join(help_result.stdout.split())
 
 
 def test_expression_excludes_every_component():

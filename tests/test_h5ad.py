@@ -208,7 +208,7 @@ def test_four_path_cli(h5ad_case, tmp_path):
     output = tmp_path / "scores"
     result = subprocess.run([sys.executable, '-m', 'evaluate', "--pred-path", str(paths["pred"]),
                              "--truth-path", str(paths["truth"]), "--control-path",
-                             str(paths["control"]), "--output-dir", str(output)],
+                             str(paths["control"]), "--output-dir", str(output), "--protocol", "lognorm"],
                             cwd=tmp_path, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
@@ -226,15 +226,24 @@ def test_four_path_cli(h5ad_case, tmp_path):
     assert (output / "summary.csv").read_text().splitlines()[0] == ",".join(METRICS)
 
 
-def test_h5ad_cli_requires_independent_control(h5ad_case, tmp_path):
+def test_h5ad_cli_reads_controls_directly_from_dataset(h5ad_case, tmp_path):
     paths, *_ = h5ad_case
+    truth = ad.read_h5ad(paths["truth"])
+    truth = truth[truth.obs.target_gene != 'G3'].copy()
+    truth.write_h5ad(paths["truth"])
+    root = tmp_path / "dataset"
+    (root / "train").mkdir(parents=True)
+    ad.read_h5ad(paths["control"]).write_h5ad(root / "train/adata_Training.h5ad")
+    output = tmp_path / "dataset_results"
     result = subprocess.run([sys.executable, '-m', 'evaluate', "--pred-path", str(paths["pred"]),
                              "--truth-path", str(paths["truth"]),
-                             "--output-dir", str(tmp_path / "missing_control")],
+                             "--data-root", str(root), "--output-dir", str(output)],
                             capture_output=True, text=True)
-    assert result.returncode == 2
-    assert "--control-path" in result.stderr
-    assert not (tmp_path / "missing_control").exists()
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads((output / "summary.json").read_text())
+    assert summary["control_source"] == "dataset_train"
+    assert summary["control_data"] == str(root / "train/adata_Training.h5ad")
+    assert summary["n_control_cells"] == 56
 
 
 def test_gears_pkl_requires_the_separate_h5ad_exporter(tmp_path, capsys):

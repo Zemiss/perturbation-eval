@@ -60,7 +60,8 @@ def test_four_path_cli_compares_models_with_one_prepared_reference(vcc_case, tmp
         output = tmp_path / "results" / name
         command = [sys.executable, "-m", "evaluate", "--pred-path", str(prediction),
                    "--truth-path", str(prepared / "truth.h5ad"),
-                   "--control-path", str(prepared / "control.h5ad"), "--output-dir", str(output)]
+                   "--control-path", str(prepared / "control.h5ad"), "--output-dir", str(output),
+                   "--protocol", "lognorm"]
         result = subprocess.run(command, capture_output=True, text=True)
         assert result.returncode == 0, result.stdout + result.stderr
         summary = json.loads((output / "summary.json").read_text())
@@ -113,7 +114,7 @@ def test_declared_counts_layer_and_unpaired_populations(vcc_case, tmp_path):
     prediction = ad.read_h5ad(lingshu)
     prediction = prediction[:-1].copy()
     prediction.write_h5ad(lingshu)
-    summary = evaluate(lingshu, truth, control, tmp_path / "results")
+    summary = evaluate(lingshu, truth, control, tmp_path / "results", protocol="lognorm")
     assert summary["n_pred_cells"] == 143 and summary["n_real_test_cells"] == 144
     assert summary["input_layers"]["truth"] == "counts"
     assert summary["metrics"]["pds_cosine"] == pytest.approx(1.)
@@ -133,5 +134,5 @@ def test_control_only_h5ad_needs_no_label_column(vcc_case, tmp_path):
     data = ad.read_h5ad(control)
     del data.obs["target_gene"]
     data.write_h5ad(control)
-    summary = evaluate(chreode, truth, control, tmp_path / "results")
+    summary = evaluate(chreode, truth, control, tmp_path / "results", protocol="lognorm")
     assert summary["n_control_cells"] == 48
