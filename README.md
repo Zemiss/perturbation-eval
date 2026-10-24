@@ -62,7 +62,27 @@ python -m evaluate \
 
 这些文件只用于 ID 和基因顺序，不导入模型代码，也不修改仓库。若相邻词表不存在，则使用 dataset 下的 `gene_names.csv`（存在时），否则使用 truth 全部基因。其他布局可用 `--gene-map` 和 `--gene-panel` 指定；显式传入 `--truth-path` 时，默认使用该 truth 全部基因，不自动套用 VCC 注释文件。
 
-`--gene-panel` 支持一列 TXT/CSV/TSV，或 Lingshu 词表 JSON。基因名优先读取 `var.gene_name`、`gene_symbols`、`symbol`、`feature_name`，否则读取 `var_names`；Ensembl 版本后缀可通过映射解析。基因必须唯一，匹配忽略大小写，自动重排。预测和真实对照必须覆盖固定面板，不按模型分别取交集或补零。
+`--gene-panel` 支持一列 TXT/CSV/TSV、Lingshu 词表 JSON，或已有 H5AD。H5AD 只使用基因注释定义面板，不要求其中包含表达矩阵、细胞或扰动标签。基因名优先读取 `var.gene_name`、`gene_symbols`、`symbol`、`feature_name`，否则读取 `var_names`；Ensembl 版本后缀可通过映射解析。基因必须唯一，匹配忽略大小写，自动重排。预测和真实对照必须覆盖固定面板，不按模型分别取交集或补零。
+
+### Chreode 报缺少 2,594 个参考基因
+
+默认 VCC 面板是 Lingshu/GEARS 的 18,080 基因；与当前 Chreode 原生词表的交集只有 15,486 基因。Chreode 导出器仅输出该交集，因此会缺少 2,594 个默认参考基因。无需重新训练或推理，也不能补零；跨模型比较应显式固定共同的 15,486 基因面板。
+
+直接把已有 Chreode 预测作为共同基因面板即可，仍然从 dataset 读取真实测试细胞和真实对照：
+
+```bash
+python -m evaluate \
+  --pred-path /data/xiebo/mycode/outputs/chreode/prediction.h5ad \
+  --gene-panel /data/xiebo/mycode/outputs/chreode/prediction.h5ad \
+  --output-dir /data/xiebo/mycode/results/chreode
+
+python -m evaluate \
+  --pred-path /data/xiebo/mycode/outputs/lingshucell/prediction.h5ad \
+  --gene-panel /data/xiebo/mycode/outputs/chreode/prediction.h5ad \
+  --output-dir /data/xiebo/mycode/results/lingshucell_common
+```
+
+GEARS 参与比较时也传入完全相同的 `--gene-panel` 路径。只读取该文件的基因轴，预测表达仍来自各自的 `--pred-path`。所有模型在同一面板上重新归一化并计算指标；原来的 18,080 基因成绩不能直接与 15,486 基因成绩比较。默认面板保持 18,080 基因，只有显式指定共同面板才缩小范围。
 
 扰动标签自动识别 `obs.target_gene`、`gene_target`、`condition`、`target`；其他字段用 `--pert-col`。对照别名支持 `non-targeting`、`non-perturbation`、`ctrl`、`control`、`NT`，忽略大小写，其他值用 `--control-label`。`GENE+ctrl` 自动还原为 `GENE`；组合扰动保留全部靶基因。多列候选标签冲突时，需用 `--pert-col` 明确选择。
 

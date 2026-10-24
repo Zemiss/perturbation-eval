@@ -74,7 +74,8 @@ def evaluate(pred_path, truth_path=None, control_path=None, output_dir=None, *, 
             missing = set(g.upper() for g in genes) - set(g.upper() for g in source.genes)
             if missing:
                 raise ValueError(f'{source.path.name}: missing {len(missing)} reference genes; '
-                                 'use --gene-panel to specify a fixed common reference panel')
+                                 'use --gene-panel with a fixed gene list or prediction H5AD '
+                                 'and use that same panel for every model')
         lookup = {gene.upper(): gene for gene in genes}
         targets = {}
         for label in sorted(set(truth.labels)):
@@ -171,7 +172,7 @@ def main(argv=None):
     parser.add_argument('--control-label', help='Additional real control label; default: standard control aliases')
     parser.add_argument('--gene-map', type=Path, help='Gene ID to symbol TSV; dataset defaults use the adjacent Lingshu mapping')
     parser.add_argument('--gene-panel', type=Path,
-                        help='Fixed gene list or Lingshu vocabulary JSON; dataset defaults use the shared VCC vocabulary')
+                        help='Fixed gene list, vocabulary JSON or reference H5AD; use the same panel for every model')
     parser.add_argument('--num-threads', type=int, default=-1, help='CPU threads, -1 for all (default)')
     for role in ['pred', 'truth', 'control']:
         parser.add_argument(f'--{role}-input-type', choices=['counts', 'lognorm'],

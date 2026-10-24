@@ -200,14 +200,22 @@ def reference_genes(truth, panel_path=None, gene_map=None):
     if panel_path is None:
         return truth.genes
     path = Path(panel_path).expanduser()
-    if path.suffix.lower() == '.json':
+    if path.suffix.lower() == '.h5ad':
+        # A fixed model output can define the shared panel without exporting reference files.
+        # Only the gene annotations are used; panel cell labels and expression are irrelevant.
+        panel = ad.read_h5ad(path, backed='r')
+        try:
+            genes = gene_names(panel)
+        finally:
+            panel.file.close()
+    elif path.suffix.lower() == '.json':
         panel = json.loads(path.read_text(encoding='utf-8'))
         genes = _labels(panel['target_gene_to_token_id_info']['gene_names_ordered'], 'VCC gene panel').tolist()
     else:
         table = pd.read_csv(path, sep="\t" if path.suffix == ".tsv" else ",", header=None,
                             dtype=str, keep_default_na=False, comment="#")
         if table.shape[1] != 1 or table.empty:
-            raise ValueError("--gene-panel needs one gene per row in TXT/CSV/TSV or a Lingshu vocabulary JSON")
+            raise ValueError("--gene-panel needs TXT/CSV/TSV, a Lingshu vocabulary JSON or a reference H5AD")
         genes = table.iloc[:, 0].str.strip().tolist()
         if genes and genes[0].casefold() in {"gene", "gene_name", "gene_symbol", "symbol", "genes"}:
             genes = genes[1:]
